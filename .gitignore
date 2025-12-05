@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build
+artifacts/
+cache/
+typechain-types/
+
+# Environment
+.env
+
+# Deployments (keep structure, ignore actual files)
+deployments/*.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
