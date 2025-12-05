@@ -37,11 +37,11 @@ contract DiamondInit {
         fs.defaultCreatorFee = params.defaultCreatorFee;
         fs.defaultPlatformFee = params.defaultPlatformFee;
         fs.defaultBuybackFee = params.defaultBuybackFee;
+        // Platform gets fixed 0.2%, these split the remaining 99.8%
         fs.globalDEXFeeConfig = LibFee.DEXFeeConfig({
-            platformFeePercentage: 30,
             creatorFeePercentage: 50,
-            badBunnzFeePercentage: 10,
-            buybackFeePercentage: 10
+            badBunnzFeePercentage: 25,
+            buybackFeePercentage: 25
         });
 
         LibDEX.Layout storage ds = LibDEX.layout();

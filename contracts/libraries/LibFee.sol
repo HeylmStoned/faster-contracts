@@ -19,6 +19,8 @@ library LibFee {
     uint256 public constant TOTAL_TRADING_FEE = 120;
     /// @notice Flat ETH fee required for graduation
     uint256 public constant GRADUATION_FEE_ETH = 0.1 ether;
+    /// @notice Fixed platform fee for DEX LP fees (20% of total LP fees)
+    uint256 public constant DEX_PLATFORM_FEE_PERCENT = 20;
 
     /// @notice Split of the adjustable trading fee portion
     struct FeeConfig {
@@ -27,9 +29,9 @@ library LibFee {
         uint256 buybackFeePercentage;
     }
 
-    /// @notice Split configuration for DEX fee distribution
+    /// @notice Split configuration for DEX fee distribution (adjustable portion only)
+    /// @dev Platform gets fixed 20%, these percentages split the remaining 80%
     struct DEXFeeConfig {
-        uint256 platformFeePercentage;
         uint256 creatorFeePercentage;
         uint256 badBunnzFeePercentage;
         uint256 buybackFeePercentage;
@@ -102,29 +104,31 @@ library LibFee {
     }
 
     /// @notice Calculate DEX fee breakdown for an LP fee amount
+    /// @dev Fixed 20% goes to platform, remaining 80% is split per config (must sum to 100)
     /// @param _amount Total LP fees to distribute
-    /// @param _platformFeePercentage Platform share (0-100)
-    /// @param _creatorFeePercentage Creator share (0-100)
-    /// @param _badBunnzFeePercentage Bad Bunnz share (0-100)
-    /// @param _buybackFeePercentage Buyback share (0-100)
+    /// @param _creatorFeePercentage Creator share of adjustable 80% portion (0-100)
+    /// @param _badBunnzFeePercentage Bad Bunnz share of adjustable 80% portion (0-100)
+    /// @param _buybackFeePercentage Buyback share of adjustable 80% portion (0-100)
     /// @return breakdown Struct with platform, creator, Bad Bunnz, buyback and total fee amounts
     function calculateDEXFees(
         uint256 _amount,
-        uint256 _platformFeePercentage,
         uint256 _creatorFeePercentage,
         uint256 _badBunnzFeePercentage,
         uint256 _buybackFeePercentage
     ) internal pure returns (FeeBreakdown memory breakdown) {
         require(
-            _platformFeePercentage + _creatorFeePercentage + 
-            _badBunnzFeePercentage + _buybackFeePercentage == 100,
+            _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
             "DEX fee percentages must sum to 100"
         );
         
-        breakdown.platformFee = (_amount * _platformFeePercentage) / 100;
-        breakdown.creatorFee = (_amount * _creatorFeePercentage) / 100;
-        breakdown.badBunnzFee = (_amount * _badBunnzFeePercentage) / 100;
-        breakdown.buybackFee = (_amount * _buybackFeePercentage) / 100;
+        // Fixed 20% platform fee
+        breakdown.platformFee = (_amount * DEX_PLATFORM_FEE_PERCENT) / 100;
+        
+        // Remaining 80% split per config
+        uint256 adjustableAmount = _amount - breakdown.platformFee;
+        breakdown.creatorFee = (adjustableAmount * _creatorFeePercentage) / 100;
+        breakdown.badBunnzFee = (adjustableAmount * _badBunnzFeePercentage) / 100;
+        breakdown.buybackFee = adjustableAmount - breakdown.creatorFee - breakdown.badBunnzFee;
         breakdown.totalFee = _amount;
     }
 
@@ -153,10 +157,10 @@ library LibFee {
     event FeeConfigSet(address indexed token, uint256 creatorFee, uint256 badBunnzFee, uint256 buybackFee);
 
     /// @notice Emitted when per-token DEX fee configuration is set
-    event DEXFeeConfigSet(address indexed token, uint256 platformFee, uint256 creatorFee, uint256 badBunnzFee, uint256 buybackFee);
+    event DEXFeeConfigSet(address indexed token, uint256 creatorFee, uint256 badBunnzFee, uint256 buybackFee);
 
     /// @notice Emitted when the global DEX fee configuration is updated
-    event GlobalDEXFeeConfigUpdated(uint256 platformFee, uint256 creatorFee, uint256 badBunnzFee, uint256 buybackFee);
+    event GlobalDEXFeeConfigUpdated(uint256 creatorFee, uint256 badBunnzFee, uint256 buybackFee);
 
     /// @notice Emitted when fee wallets are updated
     event FeeWalletsUpdated(address platformWallet, address buybackWallet);

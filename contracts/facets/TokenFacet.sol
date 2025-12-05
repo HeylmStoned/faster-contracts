@@ -43,8 +43,7 @@ contract TokenFacet {
     /// @param _creatorFeePercentage Creator's share of BC trading fees (must sum to 100 with others)
     /// @param _badBunnzFeePercentage Bad Bunnz share of BC trading fees
     /// @param _buybackFeePercentage Buyback share of BC trading fees
-    /// @param _dexPlatformFeePercentage Platform share of DEX LP fees (must sum to 100 with others)
-    /// @param _dexCreatorFeePercentage Creator share of DEX LP fees
+    /// @param _dexCreatorFeePercentage Creator share of DEX LP fees (must sum to 100 with others)
     /// @param _dexBadBunnzFeePercentage Bad Bunnz share of DEX LP fees
     /// @param _dexBuybackFeePercentage Buyback share of DEX LP fees
     /// @param _enableFairLaunch Whether to enable fair launch mode
@@ -53,6 +52,7 @@ contract TokenFacet {
     /// @param _fixedPrice Fixed price during fair launch
     /// @return id Token ID
     /// @return wrapper ERC-20 wrapper address
+    /// @dev Platform gets fixed 0.2% on both BC and DEX fees
     function createToken(
         string calldata _name,
         string calldata _symbol,
@@ -64,7 +64,6 @@ contract TokenFacet {
         uint256 _creatorFeePercentage,
         uint256 _badBunnzFeePercentage,
         uint256 _buybackFeePercentage,
-        uint256 _dexPlatformFeePercentage,
         uint256 _dexCreatorFeePercentage,
         uint256 _dexBadBunnzFeePercentage,
         uint256 _dexBuybackFeePercentage,
@@ -79,7 +78,7 @@ contract TokenFacet {
             "BC fee percentages must sum to 100"
         );
         require(
-            _dexPlatformFeePercentage + _dexCreatorFeePercentage + _dexBadBunnzFeePercentage + _dexBuybackFeePercentage == 100,
+            _dexCreatorFeePercentage + _dexBadBunnzFeePercentage + _dexBuybackFeePercentage == 100,
             "DEX fee percentages must sum to 100"
         );
         
@@ -112,7 +111,10 @@ contract TokenFacet {
         if (ts.wrapperFactory != address(0)) {
             wrapper = IWrapperFactory(ts.wrapperFactory).wrap6909(address(this), id, 0);
             ts.tokenWrapper[id] = wrapper;
+            // Approve wrapper to pull 6909 tokens and deposit them back to Diamond as ERC-20
             ts.allowance[address(this)][wrapper][id] = TOTAL_SUPPLY;
+            // Deposit 6909 tokens into wrapper, minting ERC-20 to Diamond for BC sale
+            IWrapped(wrapper).depositFor(address(this), TOTAL_SUPPLY);
         }
         
         emit LibToken.TokenCreated(id, msg.sender, _name, _symbol, TOTAL_SUPPLY, wrapper);
@@ -127,15 +129,14 @@ contract TokenFacet {
         fs.tokenHasCustomFees[wrapper] = true;
         emit LibFee.FeeConfigSet(wrapper, _creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
         
-        // 3. Set DEX fee configuration
+        // 3. Set DEX fee configuration (platform fee is fixed at 0.2%)
         fs.tokenDEXFeeConfigs[wrapper] = LibFee.DEXFeeConfig({
-            platformFeePercentage: _dexPlatformFeePercentage,
             creatorFeePercentage: _dexCreatorFeePercentage,
             badBunnzFeePercentage: _dexBadBunnzFeePercentage,
             buybackFeePercentage: _dexBuybackFeePercentage
         });
         fs.tokenHasCustomDEXFees[wrapper] = true;
-        emit LibFee.DEXFeeConfigSet(wrapper, _dexPlatformFeePercentage, _dexCreatorFeePercentage, _dexBadBunnzFeePercentage, _dexBuybackFeePercentage);
+        emit LibFee.DEXFeeConfigSet(wrapper, _dexCreatorFeePercentage, _dexBadBunnzFeePercentage, _dexBuybackFeePercentage);
         
         // 4. Enable fair launch if requested
         if (_enableFairLaunch) {

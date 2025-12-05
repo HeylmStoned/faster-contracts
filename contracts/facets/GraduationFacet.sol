@@ -186,6 +186,7 @@ contract GraduationFacet is ReentrancyGuard {
     }
     
     /// @notice Internal function to distribute DEX fees to creator and platform
+    /// @dev Fixed 0.2% platform fee, remaining split per DEX fee config
     /// @param _token Token address
     /// @param _ethAmount Total ETH fees to distribute
     function _distributeDEXFees(address _token, uint256 _ethAmount) internal {
@@ -199,24 +200,26 @@ contract GraduationFacet is ReentrancyGuard {
             ? fs.tokenDEXFeeConfigs[_token] 
             : fs.globalDEXFeeConfig;
         
-        // Calculate fee breakdown
-        uint256 platformFee = (_ethAmount * config.platformFeePercentage) / 100;
-        uint256 creatorFee = (_ethAmount * config.creatorFeePercentage) / 100;
-        uint256 badBunnzFee = (_ethAmount * config.badBunnzFeePercentage) / 100;
-        uint256 buybackFee = _ethAmount - platformFee - creatorFee - badBunnzFee;
+        // Calculate fee breakdown using library (fixed 0.2% platform + adjustable split)
+        LibFee.FeeBreakdown memory breakdown = LibFee.calculateDEXFees(
+            _ethAmount,
+            config.creatorFeePercentage,
+            config.badBunnzFeePercentage,
+            config.buybackFeePercentage
+        );
         
         // Credit fees to storage (claimable later)
-        fs.totalPlatformFees += platformFee;
-        fs.totalBadBunnzFees += badBunnzFee;
-        fs.totalBuybackFees += buybackFee;
+        fs.totalPlatformFees += breakdown.platformFee;
+        fs.totalBadBunnzFees += breakdown.badBunnzFee;
+        fs.totalBuybackFees += breakdown.buybackFee;
         
         // Credit creator rewards directly (they can claim anytime)
-        if (creator != address(0) && creatorFee > 0) {
-            fs.creatorRewards[creator] += creatorFee;
-            fs.totalCreatorFees += creatorFee;
+        if (creator != address(0) && breakdown.creatorFee > 0) {
+            fs.creatorRewards[creator] += breakdown.creatorFee;
+            fs.totalCreatorFees += breakdown.creatorFee;
         }
         
-        emit LibFee.FeesDistributed(_token, creator, platformFee, creatorFee, badBunnzFee, buybackFee);
+        emit LibFee.FeesDistributed(_token, creator, breakdown.platformFee, breakdown.creatorFee, breakdown.badBunnzFee, breakdown.buybackFee);
     }
 
     /// @notice Create or fetch an existing pool for a token/WETH pair, initializing price if needed

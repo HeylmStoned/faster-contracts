@@ -48,20 +48,19 @@ contract FeeFacet is ReentrancyGuard {
 
     /// @notice Set per-token DEX LP fee percentages
     /// @dev Creator or diamond owner may call; percentages must sum to 100
+    /// @dev Platform gets fixed 20%, these percentages split the remaining 80%
     /// @param _token Token address
-    /// @param _platformFeePercentage Platform share
-    /// @param _creatorFeePercentage Creator share
-    /// @param _badBunnzFeePercentage Bad Bunnz share
-    /// @param _buybackFeePercentage Buyback share
+    /// @param _creatorFeePercentage Creator share of adjustable 80% portion
+    /// @param _badBunnzFeePercentage Bad Bunnz share of adjustable 80% portion
+    /// @param _buybackFeePercentage Buyback share of adjustable 80% portion
     function setDEXFeePercentages(
         address _token,
-        uint256 _platformFeePercentage,
         uint256 _creatorFeePercentage,
         uint256 _badBunnzFeePercentage,
         uint256 _buybackFeePercentage
     ) external {
         require(
-            _platformFeePercentage + _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
+            _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
             "DEX fee percentages must sum to 100"
         );
         
@@ -73,43 +72,39 @@ contract FeeFacet is ReentrancyGuard {
         
         LibFee.Layout storage fs = LibFee.layout();
         fs.tokenDEXFeeConfigs[_token] = LibFee.DEXFeeConfig({
-            platformFeePercentage: _platformFeePercentage,
             creatorFeePercentage: _creatorFeePercentage,
             badBunnzFeePercentage: _badBunnzFeePercentage,
             buybackFeePercentage: _buybackFeePercentage
         });
         fs.tokenHasCustomDEXFees[_token] = true;
         
-        emit LibFee.DEXFeeConfigSet(_token, _platformFeePercentage, _creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
+        emit LibFee.DEXFeeConfigSet(_token, _creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
     }
 
     /// @notice Update the global DEX fee configuration used as default
-    /// @dev Only owner; percentages must sum to 100
-    /// @param _platformFeePercentage Platform share
-    /// @param _creatorFeePercentage Creator share
-    /// @param _badBunnzFeePercentage Bad Bunnz share
-    /// @param _buybackFeePercentage Buyback share
+    /// @dev Only owner; percentages must sum to 100. Platform gets fixed 20%.
+    /// @param _creatorFeePercentage Creator share of adjustable 80% portion
+    /// @param _badBunnzFeePercentage Bad Bunnz share of adjustable 80% portion
+    /// @param _buybackFeePercentage Buyback share of adjustable 80% portion
     function updateGlobalDEXFeeConfig(
-        uint256 _platformFeePercentage,
         uint256 _creatorFeePercentage,
         uint256 _badBunnzFeePercentage,
         uint256 _buybackFeePercentage
     ) external {
         LibDiamond.enforceIsContractOwner();
         require(
-            _platformFeePercentage + _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
+            _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
             "DEX fee percentages must sum to 100"
         );
         
         LibFee.Layout storage fs = LibFee.layout();
         fs.globalDEXFeeConfig = LibFee.DEXFeeConfig({
-            platformFeePercentage: _platformFeePercentage,
             creatorFeePercentage: _creatorFeePercentage,
             badBunnzFeePercentage: _badBunnzFeePercentage,
             buybackFeePercentage: _buybackFeePercentage
         });
         
-        emit LibFee.GlobalDEXFeeConfigUpdated(_platformFeePercentage, _creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
+        emit LibFee.GlobalDEXFeeConfigUpdated(_creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
     }
 
     /// @notice Distribute bonding-curve trading fees held by the diamond
@@ -173,7 +168,6 @@ contract FeeFacet is ReentrancyGuard {
         
         LibFee.FeeBreakdown memory breakdown = LibFee.calculateDEXFees(
             _totalLPFees,
-            config.platformFeePercentage,
             config.creatorFeePercentage,
             config.badBunnzFeePercentage,
             config.buybackFeePercentage
@@ -315,25 +309,25 @@ contract FeeFacet is ReentrancyGuard {
     /// @notice Convenience helper for creators to set their DEX fee share
     /// @param _token Token address
     /// @param _creatorFeePercentage Creator share (capped at 60%)
+    /// @dev Platform gets fixed 0.2%, remaining split: creator + proportional bad bunnz/buyback
     function setCreatorDEXFees(address _token, uint256 _creatorFeePercentage) external {
         require(_creatorFeePercentage <= 60, "Creator fee cannot exceed 60%");
         require(msg.sender == _getTokenCreator(_token), "Only token creator can set their fees");
         
+        // Remaining percentage split proportionally between bad bunnz and buyback (1:1 ratio)
         uint256 remainingPercentage = 100 - _creatorFeePercentage;
-        uint256 platformFeePercentage = (remainingPercentage * 30) / 50;
-        uint256 badBunnzFeePercentage = (remainingPercentage * 10) / 50;
-        uint256 buybackFeePercentage = remainingPercentage - platformFeePercentage - badBunnzFeePercentage;
+        uint256 badBunnzFeePercentage = remainingPercentage / 2;
+        uint256 buybackFeePercentage = remainingPercentage - badBunnzFeePercentage;
         
         LibFee.Layout storage fs = LibFee.layout();
         fs.tokenDEXFeeConfigs[_token] = LibFee.DEXFeeConfig({
-            platformFeePercentage: platformFeePercentage,
             creatorFeePercentage: _creatorFeePercentage,
             badBunnzFeePercentage: badBunnzFeePercentage,
             buybackFeePercentage: buybackFeePercentage
         });
         fs.tokenHasCustomDEXFees[_token] = true;
         
-        emit LibFee.DEXFeeConfigSet(_token, platformFeePercentage, _creatorFeePercentage, badBunnzFeePercentage, buybackFeePercentage);
+        emit LibFee.DEXFeeConfigSet(_token, _creatorFeePercentage, badBunnzFeePercentage, buybackFeePercentage);
     }
 
     /// @notice Get unclaimed creator rewards
@@ -426,14 +420,15 @@ contract FeeFacet is ReentrancyGuard {
     }
 
     /// @notice Get the configured DEX fee percentages for a token
+    /// @dev Platform fee is always fixed at 20%, returned as constant
     /// @param _token Token address
-    /// @return platformFee Platform percentage
-    /// @return creatorFee Creator percentage
-    /// @return badBunnzFee Bad Bunnz percentage
-    /// @return buybackFee Buyback percentage
+    /// @return platformFeePercent Fixed platform fee percentage (always 20)
+    /// @return creatorFee Creator percentage of adjustable 80% portion
+    /// @return badBunnzFee Bad Bunnz percentage of adjustable 80% portion
+    /// @return buybackFee Buyback percentage of adjustable 80% portion
     /// @return hasCustomFees True if the token has its own DEX config
     function getDEXFeeBreakdown(address _token) external view returns (
-        uint256 platformFee,
+        uint256 platformFeePercent,
         uint256 creatorFee,
         uint256 badBunnzFee,
         uint256 buybackFee,
@@ -447,7 +442,7 @@ contract FeeFacet is ReentrancyGuard {
             fs.globalDEXFeeConfig;
         
         return (
-            config.platformFeePercentage,
+            LibFee.DEX_PLATFORM_FEE_PERCENT, // Fixed 20%
             config.creatorFeePercentage,
             config.badBunnzFeePercentage,
             config.buybackFeePercentage,

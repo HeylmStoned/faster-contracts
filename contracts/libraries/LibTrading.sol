@@ -11,8 +11,8 @@ library LibTrading {
 
     /// @notice Initial token price in ETH
     uint256 public constant INITIAL_PRICE = 0.00001 ether;
-    /// @notice Bonding curve steepness constant (calibrated for price continuity at graduation)
-    uint256 public constant K = 149585;
+    /// @notice Bonding curve steepness constant (calibrated for 684k tokens = ~30 ETH with price continuity)
+    uint256 public constant K = 149585730870328030000000;
     /// @notice Token limit for bonding curve phase (684k tokens sold via BC)
     uint256 public constant TOKEN_LIMIT = 684000 ether;
     /// @notice Total token supply (1 million)
