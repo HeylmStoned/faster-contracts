@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import {LibToken} from "../libraries/LibToken.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {LibFee} from "../libraries/LibFee.sol";
+import {LibSecurity} from "../libraries/LibSecurity.sol";
 
 /**
  * @title TokenFacet
@@ -26,18 +28,31 @@ contract TokenFacet {
         _;
     }
 
-    /// @notice Create a new ERC-6909 token id with metadata and fixed supply
-    /// @param _name Human-readable token name
-    /// @param _symbol Short ticker symbol
-    /// @param _description Long-form textual description
-    /// @param _imageUrl URL to a token image
-    /// @param _website Project website URL
-    /// @param _twitter Twitter/X handle or URL
-    /// @param _telegram Telegram handle or URL
-    /// @param _totalSupply Fixed supply for this token id (18 decimals)
-    /// @param _recipient Address that ultimately receives the created supply or wrapped ERC-20
-    /// @return id Newly created token id
-    /// @return wrapper Address of the associated wrapper token or zero address if none was deployed
+    /// @notice Fixed total supply for all tokens (1 million with 18 decimals)
+    /// @dev 400k sold via bonding curve, 600k reserved for DEX liquidity
+    uint256 public constant TOTAL_SUPPLY = 1_000_000 ether;
+
+    /// @notice Create a new ERC-6909 token with full configuration
+    /// @param _name Token name
+    /// @param _symbol Token symbol
+    /// @param _description Token description
+    /// @param _imageUrl Token image URL
+    /// @param _website Project website
+    /// @param _twitter Twitter handle
+    /// @param _telegram Telegram handle
+    /// @param _creatorFeePercentage Creator's share of BC trading fees (must sum to 100 with others)
+    /// @param _badBunnzFeePercentage Bad Bunnz share of BC trading fees
+    /// @param _buybackFeePercentage Buyback share of BC trading fees
+    /// @param _dexPlatformFeePercentage Platform share of DEX LP fees (must sum to 100 with others)
+    /// @param _dexCreatorFeePercentage Creator share of DEX LP fees
+    /// @param _dexBadBunnzFeePercentage Bad Bunnz share of DEX LP fees
+    /// @param _dexBuybackFeePercentage Buyback share of DEX LP fees
+    /// @param _enableFairLaunch Whether to enable fair launch mode
+    /// @param _fairLaunchDuration Duration of fair launch in seconds
+    /// @param _maxPerWallet Max tokens per wallet during fair launch
+    /// @param _fixedPrice Fixed price during fair launch
+    /// @return id Token ID
+    /// @return wrapper ERC-20 wrapper address
     function createToken(
         string calldata _name,
         string calldata _symbol,
@@ -46,11 +61,37 @@ contract TokenFacet {
         string calldata _website,
         string calldata _twitter,
         string calldata _telegram,
-        uint256 _totalSupply,
-        address _recipient
+        uint256 _creatorFeePercentage,
+        uint256 _badBunnzFeePercentage,
+        uint256 _buybackFeePercentage,
+        uint256 _dexPlatformFeePercentage,
+        uint256 _dexCreatorFeePercentage,
+        uint256 _dexBadBunnzFeePercentage,
+        uint256 _dexBuybackFeePercentage,
+        bool _enableFairLaunch,
+        uint256 _fairLaunchDuration,
+        uint256 _maxPerWallet,
+        uint256 _fixedPrice
     ) external returns (uint256 id, address wrapper) {
-        LibToken.Layout storage ts = LibToken.layout();
+        // Validate fee percentages
+        require(
+            _creatorFeePercentage + _badBunnzFeePercentage + _buybackFeePercentage == 100,
+            "BC fee percentages must sum to 100"
+        );
+        require(
+            _dexPlatformFeePercentage + _dexCreatorFeePercentage + _dexBadBunnzFeePercentage + _dexBuybackFeePercentage == 100,
+            "DEX fee percentages must sum to 100"
+        );
         
+        // Validate fair launch params if enabled
+        if (_enableFairLaunch) {
+            require(_fairLaunchDuration > 0, "Fair launch duration must be > 0");
+            require(_maxPerWallet > 0, "Max per wallet must be > 0");
+            require(_fixedPrice > 0, "Fixed price must be > 0");
+        }
+        
+        // 1. Create the token
+        LibToken.Layout storage ts = LibToken.layout();
         id = ++ts.tokenCount;
         
         LibToken.TokenData storage token = ts.tokens[id];
@@ -62,21 +103,51 @@ contract TokenFacet {
         token.twitter = _twitter;
         token.telegram = _telegram;
         token.creator = msg.sender;
-        token.totalSupply = _totalSupply;
+        token.totalSupply = TOTAL_SUPPLY;
         token.createdAt = block.timestamp;
 
+        ts.balanceOf[address(this)][id] = TOTAL_SUPPLY;
+        emit LibToken.Transfer(msg.sender, address(0), address(this), id, TOTAL_SUPPLY);
+        
         if (ts.wrapperFactory != address(0)) {
-            ts.balanceOf[address(this)][id] = _totalSupply;
-            emit LibToken.Transfer(msg.sender, address(0), address(this), id, _totalSupply);
             wrapper = IWrapperFactory(ts.wrapperFactory).wrap6909(address(this), id, 0);
             ts.tokenWrapper[id] = wrapper;
-            ts.allowance[address(this)][wrapper][id] = _totalSupply;
-            IWrapped(wrapper).depositFor(_recipient, _totalSupply);
-            emit LibToken.TokenCreated(id, msg.sender, _name, _symbol, _totalSupply, wrapper);
-        } else {
-            ts.balanceOf[_recipient][id] = _totalSupply;
-            emit LibToken.TokenCreated(id, msg.sender, _name, _symbol, _totalSupply, address(0));
-            emit LibToken.Transfer(msg.sender, address(0), _recipient, id, _totalSupply);
+            ts.allowance[address(this)][wrapper][id] = TOTAL_SUPPLY;
+        }
+        
+        emit LibToken.TokenCreated(id, msg.sender, _name, _symbol, TOTAL_SUPPLY, wrapper);
+        
+        // 2. Set BC fee configuration
+        LibFee.Layout storage fs = LibFee.layout();
+        fs.tokenFeeConfigs[wrapper] = LibFee.FeeConfig({
+            creatorFeePercentage: _creatorFeePercentage,
+            badBunnzFeePercentage: _badBunnzFeePercentage,
+            buybackFeePercentage: _buybackFeePercentage
+        });
+        fs.tokenHasCustomFees[wrapper] = true;
+        emit LibFee.FeeConfigSet(wrapper, _creatorFeePercentage, _badBunnzFeePercentage, _buybackFeePercentage);
+        
+        // 3. Set DEX fee configuration
+        fs.tokenDEXFeeConfigs[wrapper] = LibFee.DEXFeeConfig({
+            platformFeePercentage: _dexPlatformFeePercentage,
+            creatorFeePercentage: _dexCreatorFeePercentage,
+            badBunnzFeePercentage: _dexBadBunnzFeePercentage,
+            buybackFeePercentage: _dexBuybackFeePercentage
+        });
+        fs.tokenHasCustomDEXFees[wrapper] = true;
+        emit LibFee.DEXFeeConfigSet(wrapper, _dexPlatformFeePercentage, _dexCreatorFeePercentage, _dexBadBunnzFeePercentage, _dexBuybackFeePercentage);
+        
+        // 4. Enable fair launch if requested
+        if (_enableFairLaunch) {
+            LibSecurity.Layout storage ss = LibSecurity.layout();
+            ss.fairLaunchConfigs[wrapper] = LibSecurity.FairLaunchConfig({
+                enabled: true,
+                duration: _fairLaunchDuration,
+                maxPerWallet: _maxPerWallet,
+                fixedPrice: _fixedPrice,
+                startTime: block.timestamp
+            });
+            emit LibSecurity.FairLaunchEnabled(wrapper, _fairLaunchDuration, _maxPerWallet);
         }
     }
 

@@ -69,11 +69,16 @@ contract GraduationFacet is ReentrancyGuard {
             tokensForDEX = tokenBalance;
         }
         
-        // 6. Burn excess tokens
+        // 6. Only burn if difference > 1% (keeps supply clean at 1M for small deviations)
         uint256 tokensToBurn = tokenBalance - tokensForDEX;
-        if (tokensToBurn > 0) {
+        uint256 burnThreshold = tokenBalance / 100; // 1% threshold
+        
+        if (tokensToBurn > burnThreshold) {
             IERC20(_token).transfer(DEAD_ADDRESS, tokensToBurn);
             emit TokensBurned(_token, tokensToBurn);
+        } else {
+            // Use all remaining tokens - small price deviation is acceptable
+            tokensForDEX = tokenBalance;
         }
         
         // 7. Create pool and position

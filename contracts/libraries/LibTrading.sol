@@ -11,12 +11,12 @@ library LibTrading {
 
     /// @notice Initial token price in ETH
     uint256 public constant INITIAL_PRICE = 0.00001 ether;
-    /// @notice Bonding curve steepness constant (~6.42e23)
-    uint256 public constant K = 642337649721702000000000;
-    /// @notice Maximum token supply for bonding curve
-    uint256 public constant MAX_SUPPLY = 800000 ether;
-    /// @notice Token limit for bonding curve phase (400k tokens)
-    uint256 public constant TOKEN_LIMIT = 400000 ether;
+    /// @notice Bonding curve steepness constant (calibrated for price continuity at graduation)
+    uint256 public constant K = 149585;
+    /// @notice Token limit for bonding curve phase (684k tokens sold via BC)
+    uint256 public constant TOKEN_LIMIT = 684000 ether;
+    /// @notice Total token supply (1 million)
+    uint256 public constant TOTAL_SUPPLY = 1000000 ether;
     /// @notice Maximum ETH per buy transaction
     uint256 public constant MAX_BUY_AMOUNT = 1 ether;
     /// @notice Default ETH target for graduation
@@ -114,11 +114,11 @@ library LibTrading {
         
         for (uint256 i = 0; i < 4; i++) {
             uint256 chunkSize = chunkSizes[i];
-            while (ethRemaining > 0 && (currentSold + chunkSize) <= MAX_SUPPLY) {
+            while (ethRemaining > 0 && (currentSold + chunkSize) <= TOKEN_LIMIT) {
                 uint256 avgPrice = getBuyPrice(currentSold + (chunkSize / 2));
                 uint256 chunkCost = (avgPrice * chunkSize) / 1e18;
                 
-                if (chunkCost <= ethRemaining && (tokenAmount + chunkSize) <= MAX_SUPPLY) {
+                if (chunkCost <= ethRemaining && (tokenAmount + chunkSize) <= TOKEN_LIMIT) {
                     tokenAmount += chunkSize;
                     ethRemaining -= chunkCost;
                     currentSold += chunkSize;

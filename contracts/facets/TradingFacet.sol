@@ -66,23 +66,38 @@ contract TradingFacet is ReentrancyGuard {
         uint256 fee = (msg.value * LibFee.TOTAL_TRADING_FEE) / LibFee.BASIS_POINTS;
         uint256 ethForTokens = msg.value - fee;
         
-        tokensOut = LibTrading.getTokensForETH(data.totalSold, ethForTokens);
+        bool isFairLaunch = LibSecurity.isFairLaunchActive(fairConfig);
+        
+        if (isFairLaunch) {
+            // Fair launch: use fixed price
+            tokensOut = (ethForTokens * 1e18) / fairConfig.fixedPrice;
+            ethSpent = (tokensOut * fairConfig.fixedPrice) / 1e18;
+        } else {
+            // Normal: use bonding curve
+            tokensOut = LibTrading.getTokensForETH(data.totalSold, ethForTokens);
+            ethSpent = LibTrading.getBuyCost(data.totalSold, tokensOut);
+        }
+        
         require(tokensOut > 0, "Insufficient ETH for purchase");
         
         if (data.totalSold + tokensOut > LibTrading.TOKEN_LIMIT) {
             tokensOut = LibTrading.TOKEN_LIMIT - data.totalSold;
             require(tokensOut > 0, "Token limit reached");
+            // Recalculate ethSpent for capped amount
+            if (isFairLaunch) {
+                ethSpent = (tokensOut * fairConfig.fixedPrice) / 1e18;
+            } else {
+                ethSpent = LibTrading.getBuyCost(data.totalSold, tokensOut);
+            }
         }
         
         require(tokensOut >= _minTokensOut, "Output below minimum (slippage too high)");
         
-        if (LibSecurity.isFairLaunchActive(fairConfig)) {
+        if (isFairLaunch) {
             uint256 currentPurchased = ss.walletPurchases[_token][_buyer];
             require(currentPurchased + tokensOut <= fairConfig.maxPerWallet, "Exceeds max per wallet");
             ss.walletPurchases[_token][_buyer] = currentPurchased + tokensOut;
         }
-        
-        ethSpent = LibTrading.getBuyCost(data.totalSold, tokensOut);
         require(ethSpent <= ethForTokens, "Calculation error");
         
         data.totalSold += tokensOut;
