@@ -162,8 +162,8 @@ When ETH target (30 ETH) or token limit (684k) is met, graduation triggers autom
 1. Token trades freely on Uniswap V3 - no restrictions
 2. LP fees accumulate in the position (0.3% per swap)
 3. Anyone can call `collectFees(token)` to harvest LP fees
-4. Fees auto-distribute per token's DEX fee config (set at creation):
-   - Default: 50% creator, 30% platform, 10% Bad Bunnz, 10% buyback
+4. Fees auto-distribute: 20% platform (fixed) + 80% per token's DEX fee config:
+   - Default 80% split: 50% creator, 25% Bad Bunnz, 25% buyback
 5. Creator calls `claimCreatorRewards()` anytime to withdraw their share
 
 ## Facets
@@ -183,8 +183,7 @@ function createToken(
     uint256 creatorFeePercentage,    // BC fee: creator share (sum must = 100)
     uint256 badBunnzFeePercentage,   // BC fee: Bad Bunnz share
     uint256 buybackFeePercentage,    // BC fee: buyback share
-    uint256 dexPlatformFeePercentage,  // DEX LP fee: platform (sum must = 100)
-    uint256 dexCreatorFeePercentage,   // DEX LP fee: creator
+    uint256 dexCreatorFeePercentage,   // DEX LP fee: creator (sum must = 100, platform is fixed 20%)
     uint256 dexBadBunnzFeePercentage,  // DEX LP fee: Bad Bunnz
     uint256 dexBuybackFeePercentage,   // DEX LP fee: buyback
     bool enableFairLaunch,           // Enable fair launch mode
@@ -309,11 +308,12 @@ Trades on Uniswap V3
 Anyone calls collectFees(token)
       │
       ▼
-Auto-distributed:
-      ├──► 50% Creator rewards (claimable)
-      ├──► 30% Platform
-      ├──► 10% Bad Bunnz
-      └──► 10% Buyback
+      ├──► 20% Platform (fixed)
+      │
+      └──► 80% Adjustable (default split):
+              ├──► 50% Creator rewards (claimable)
+              ├──► 25% Bad Bunnz
+              └──► 25% Buyback
 ```
 
 ### Creator Claiming
@@ -349,22 +349,22 @@ npx hardhat run scripts/verify-diamond.js --network megaethTestnet
 
 ## Contract Addresses (MegaETH Testnet)
 
-**Deployed: December 5, 2025** | All contracts verified ✅
+**Deployed: December 5, 2025** | All contracts verified ✅ | Fixed 20% DEX platform fee
 
 | Contract | Address |
 |----------|---------|
-| **Diamond** | [`0xbFa4308b2b0b3d7385Cd1fFBEF5383080B6c7916`](https://megaeth-testnet-v2.blockscout.com/address/0xbFa4308b2b0b3d7385Cd1fFBEF5383080B6c7916) |
-| DiamondCut | [`0x5785Fa95D7C35C08DE4419047108694489B0edd3`](https://megaeth-testnet-v2.blockscout.com/address/0x5785Fa95D7C35C08DE4419047108694489B0edd3) |
-| DiamondLoupe | [`0x4fe0d109A814B8a117c4074c2c74ffD2ef80fdeF`](https://megaeth-testnet-v2.blockscout.com/address/0x4fe0d109A814B8a117c4074c2c74ffD2ef80fdeF) |
-| TokenFacet | [`0xd8f01298A63BcEaAb66624F0db3066420e57B26e`](https://megaeth-testnet-v2.blockscout.com/address/0xd8f01298A63BcEaAb66624F0db3066420e57B26e) |
-| TradingFacet | [`0xCd3ad3c1287f6aDdd959F6f370Ed396652Ff4f3f`](https://megaeth-testnet-v2.blockscout.com/address/0xCd3ad3c1287f6aDdd959F6f370Ed396652Ff4f3f) |
-| GraduationFacet | [`0x5A197a0Cd36BeE7DA98c05F40B2709c6aD7B2395`](https://megaeth-testnet-v2.blockscout.com/address/0x5A197a0Cd36BeE7DA98c05F40B2709c6aD7B2395) |
-| FeeFacet | [`0x86DD9C8A84B62E8c21e48c3FbA598FA90da07607`](https://megaeth-testnet-v2.blockscout.com/address/0x86DD9C8A84B62E8c21e48c3FbA598FA90da07607) |
-| SecurityFacet | [`0x034a80a5d6Bde88c03dF7c9A786690A4Fe45Bc4D`](https://megaeth-testnet-v2.blockscout.com/address/0x034a80a5d6Bde88c03dF7c9A786690A4Fe45Bc4D) |
-| AdminFacet | [`0xe2C80379B99FDc8985C964C98bF52b1c59444DD3`](https://megaeth-testnet-v2.blockscout.com/address/0xe2C80379B99FDc8985C964C98bF52b1c59444DD3) |
-| ERC6909Facet | [`0x196899fD510C59D2Ea615cA379eC1a22F882FB69`](https://megaeth-testnet-v2.blockscout.com/address/0x196899fD510C59D2Ea615cA379eC1a22F882FB69) |
-| WrapperFacet | [`0x6423De9c60EF0D4BD383CbB298Fb93fC8e5b43F1`](https://megaeth-testnet-v2.blockscout.com/address/0x6423De9c60EF0D4BD383CbB298Fb93fC8e5b43F1) |
-| DiamondInit | [`0x77057FcB69BD57e842c70408B15F8fE314bEe44b`](https://megaeth-testnet-v2.blockscout.com/address/0x77057FcB69BD57e842c70408B15F8fE314bEe44b) |
+| **Diamond** | [`0x8Ee43427E435253Bdc94d9Ab81daeC441C03EB2e`](https://megaeth-testnet-v2.blockscout.com/address/0x8Ee43427E435253Bdc94d9Ab81daeC441C03EB2e) |
+| DiamondCut | [`0xD64C6adc320FF3D0B7d09F6770e3095Ed7bF1022`](https://megaeth-testnet-v2.blockscout.com/address/0xD64C6adc320FF3D0B7d09F6770e3095Ed7bF1022) |
+| DiamondLoupe | [`0x0edE8cCe0F0065AB48a6c8aa1108e6763a6D6453`](https://megaeth-testnet-v2.blockscout.com/address/0x0edE8cCe0F0065AB48a6c8aa1108e6763a6D6453) |
+| TokenFacet | [`0x6799c57642E9F5813dBE2B01c27ce024cb417f87`](https://megaeth-testnet-v2.blockscout.com/address/0x6799c57642E9F5813dBE2B01c27ce024cb417f87) |
+| TradingFacet | [`0xA52978d657dE175fD4F537f5d3bfe166c40E47d8`](https://megaeth-testnet-v2.blockscout.com/address/0xA52978d657dE175fD4F537f5d3bfe166c40E47d8) |
+| GraduationFacet | [`0xc4a4771d91f6ce5732b287c21F60b2B193fdF0CE`](https://megaeth-testnet-v2.blockscout.com/address/0xc4a4771d91f6ce5732b287c21F60b2B193fdF0CE) |
+| FeeFacet | [`0xE75A6cdDc836f4dB8aA1794B05e6545b89c774Bb`](https://megaeth-testnet-v2.blockscout.com/address/0xE75A6cdDc836f4dB8aA1794B05e6545b89c774Bb) |
+| SecurityFacet | [`0x73c1eCcc3eD0F14A720069e0B11fe9D6492e0A17`](https://megaeth-testnet-v2.blockscout.com/address/0x73c1eCcc3eD0F14A720069e0B11fe9D6492e0A17) |
+| AdminFacet | [`0xC1Eedf19d43D9e2EB462d982475Ac765c072d855`](https://megaeth-testnet-v2.blockscout.com/address/0xC1Eedf19d43D9e2EB462d982475Ac765c072d855) |
+| ERC6909Facet | [`0x2976fD1C498070b6f7024Dc7807Ea788b8c3F67D`](https://megaeth-testnet-v2.blockscout.com/address/0x2976fD1C498070b6f7024Dc7807Ea788b8c3F67D) |
+| WrapperFacet | [`0x99Ac8ccD4ed5F665330E7d5B49DB83408E8ea0Db`](https://megaeth-testnet-v2.blockscout.com/address/0x99Ac8ccD4ed5F665330E7d5B49DB83408E8ea0Db) |
+| DiamondInit | [`0x90dbE1608DcDdbD7407ccaC1005121b63201F7D0`](https://megaeth-testnet-v2.blockscout.com/address/0x90dbE1608DcDdbD7407ccaC1005121b63201F7D0) |
 | WrapperImpl | [`0x06aA00B602E7679cD25782aCe884Fb92f8F48b36`](https://megaeth-testnet-v2.blockscout.com/address/0x06aA00B602E7679cD25782aCe884Fb92f8F48b36) |
 
 ## External Dependencies
