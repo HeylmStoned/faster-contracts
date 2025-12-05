@@ -203,8 +203,10 @@ async function verifyDeployment(diamondAddress, facets) {
     }
     console.log(`Total selectors: ${totalSelectors}`);
 
+    // New 18-param createToken signature
     const keyFunctions = [
-        "createToken(string,string,string,string,string,string,string,uint256,address)",
+        "createToken(string,string,string,string,string,string,string,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bool,uint256,uint256,uint256)",
+        "initializeToken(address)",
         "buyWithETH(address,address,uint256)",
         "sellToken(address,uint256,address,uint256)",
         "setSellsEnabled(address,bool)",
